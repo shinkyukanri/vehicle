@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0f172a"/>
+<title>車両管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js"></script>
+<!-- OpenCV.js 削除：v5はCanvas固定クロップのみ・完全無料構成 -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey:"AIzaSyBKbFyam0pzVdfPZ1_GggkfkW2dJewgRbQ",
+  authDomain:"shinkyu-vehicle-e89a9.firebaseapp.com",
+  projectId:"shinkyu-vehicle-e89a9",
+  storageBucket:"shinkyu-vehicle-e89a9.firebasestorage.app",
+  messagingSenderId:"904948386750",
+  appId:"1:904948386750:web:a94fac9f3a2bd07f8307ef"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const COL = { vehicles:"vehicles", drivers:"driverList", fuelLogs:"fuelLogs", tankLogs:"tankLogs", inspects:"inspects", settings:"settings" };
+async function fbGetAll(c){const s=await getDocs(collection(db,c));return s.docs.map(d=>({...d.data(),_id:d.id}));}
+async function fbSet(c,id,data){await setDoc(doc(db,c,String(id)),data,{merge:true});}
+async function fbDel(c,id){await deleteDoc(doc(db,c,String(id)));}
+async function fbGetSetting(k){const d=await getDoc(doc(db,COL.settings,k));return d.exists()?d.data().value:null;}
+async function fbSetSetting(k,v){await setDoc(doc(db,COL.settings,k),{value:v});}
+window.FB={db,fbGetAll,fbSet,fbDel,fbGetSetting,fbSetSetting,COL,onSnapshot,collection};
+window.dispatchEvent(new Event("fbReady"));
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;overscroll-behavior:none;}
+.app{max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:40px;}
+.screen{display:none;}.screen.active{display:block;}
+.hdr{background:#0a1628;padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:50;}
+.hdr-title{font-size:17px;font-weight:800;}
+.hdr-sub{font-size:11px;color:#64748b;margin-top:1px;}
+.back-btn{background:none;border:none;color:#94a3b8;font-size:26px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;}
+.card{background:#1e293b;border-radius:14px;padding:16px;margin-bottom:12px;}
+.muted{font-size:12px;color:#64748b;}
+.pad{padding:16px;}
+.section-title{font-size:13px;color:#94a3b8;font-weight:600;margin:16px 0 8px 2px;}
+.btn-primary{width:100%;background:#f59e0b;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:800;color:#0f172a;cursor:pointer;font-family:inherit;}
+.btn-blue{width:100%;background:#1d4ed8;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;}
+.btn-ghost{background:#1e293b;border:none;border-radius:10px;padding:10px 18px;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-danger{width:100%;background:#7f1d1d;border:1px solid #ef4444;border-radius:14px;padding:14px;font-size:15px;font-weight:800;color:#fca5a5;cursor:pointer;font-family:inherit;}
+.inp{width:100%;background:#0f172a;border:1.5px solid #1e3a5f;border-radius:10px;padding:12px 14px;color:#f1f5f9;font-size:15px;outline:none;font-family:inherit;}
+.inp-num{background:#0f172a;border:1.5px solid #1e3a5f;border-radius:10px;padding:14px;color:#f1f5f9;font-size:26px;font-weight:800;outline:none;text-align:center;width:100%;font-family:inherit;}
+.lbl{font-size:12px;color:#64748b;font-weight:600;margin-bottom:5px;}
+.req{color:#ef4444;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.gauge-wrap{background:#1e293b;border-radius:16px;padding:18px 20px;margin-bottom:12px;}
+.gauge-bg{background:#0f172a;border-radius:8px;height:16px;overflow:hidden;margin:10px 0 4px;}
+.gauge-bar{height:100%;border-radius:8px;transition:width .5s;}
+.toast{position:fixed;top:24px;left:50%;transform:translateX(-50%);border-radius:14px;padding:13px 26px;font-weight:700;font-size:15px;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.5);white-space:nowrap;max-width:90vw;pointer-events:none;opacity:0;transition:opacity .2s;}
+.toast.show{opacity:1;}.toast.ok{background:#22c55e;color:#fff;}.toast.ng{background:#ef4444;color:#fff;}
+.err-box{background:rgba(127,29,29,.4);border:1px solid #ef4444;border-radius:10px;padding:12px 14px;color:#fca5a5;font-size:14px;margin-bottom:16px;display:none;}
+.badge{border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;}
+.warn-banner{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+.menu-btn{border:none;border-radius:16px;padding:20px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;font-family:inherit;}
+.driver-list{background:#1e293b;border-radius:10px;max-height:180px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.driver-item{display:block;width:100%;background:none;border:none;border-bottom:1px solid #0f172a;padding:13px 16px;color:#f1f5f9;cursor:pointer;text-align:left;font-size:15px;font-family:inherit;}
+.driver-item:last-child{border-bottom:none;}
+.driver-ok{background:#16a34a22;border:1.5px solid #22c55e55;border-radius:10px;padding:12px 14px;color:#22c55e;font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;}
+.cap-btn{width:100%;border:2px solid #334155;border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;background:#1e293b;font-family:inherit;}
+.cap-btn.on{background:#16a34a22;border-color:#22c55e;}
+.cap-chk{width:30px;height:30px;border-radius:8px;background:#0f172a;border:2px solid #334155;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;color:#fff;}
+.cap-btn.on .cap-chk{background:#22c55e;border-color:#22c55e;}
+.tab-item{background:none;border:none;border-bottom:3px solid transparent;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:#475569;font-family:inherit;}
+.tab-item.active{color:#f59e0b;border-bottom-color:#f59e0b;}
+.tab-icon{font-size:18px;}.tab-label{font-size:9px;font-weight:600;}
+.log-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #0f172a;}
+.log-row:last-child{border-bottom:none;}
+.veh-btn{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;border-bottom:1px solid #0f172a;padding:14px 16px;color:#f1f5f9;cursor:pointer;text-align:left;font-family:inherit;}
+.veh-btn:last-child{border-bottom:none;}
+.exp-ok{background:#16a34a22;color:#22c55e;}.exp-warn{background:#f59e0b22;color:#f59e0b;}.exp-ng{background:#ef444422;color:#ef4444;}
+.form-section{background:#1e293b;border-radius:14px;padding:18px;margin-bottom:12px;}
+.form-title{font-size:14px;font-weight:700;margin-bottom:14px;color:#f1f5f9;}
+.ocr-status{font-size:12px;margin-bottom:4px;display:none;}
+.ocr-debug{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;color:#94a3b8;font-family:monospace;max-height:100px;overflow-y:auto;display:none;line-height:1.6;word-break:break-all;}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="toast" id="toast"></div>
+
+<div class="screen active" id="scr-top">
+  <div class="hdr" style="justify-content:space-between;">
+    <div><div style="font-size:11px;color:#f59e0b;font-weight:700;letter-spacing:1px;">車両管理</div><div class="hdr-title">車両を選択</div></div>
+    <button class="btn-ghost" onclick="showAdmin()">🔒 管理者</button>
+  </div>
+  <div class="pad">
+    <div id="top-gauge"></div>
+    <div class="section-title">車両を選んでください（QR読み取りで自動選択）</div>
+    <div style="background:#1e293b;border-radius:14px;overflow:hidden;" id="veh-list"></div>
+  </div>
+</div>
+
+<div class="screen" id="scr-crew">
+  <div class="hdr">
+    <button class="back-btn" onclick="go('scr-top')">‹</button>
+    <div><div class="hdr-title" id="crew-num">-</div><div class="hdr-sub" id="crew-name">-</div></div>
+  </div>
+  <div class="pad">
+    <div id="crew-gauge"></div>
+    <div style="height:12px;"></div>
+    <div class="menu-grid">
+      <button class="menu-btn" onclick="go('scr-fuel')" style="background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.2);">
+        <span style="font-size:34px;">⛽</span><span style="font-size:14px;font-weight:800;color:#f59e0b;">給油入力</span><span style="font-size:11px;color:#64748b;">記録を追加</span>
+      </button>
+      <button class="menu-btn" onclick="go('scr-crew-hist')" style="background:rgba(96,165,250,.1);border:1.5px solid rgba(96,165,250,.2);">
+        <span style="font-size:34px;">📋</span><span style="font-size:14px;font-weight:800;color:#60a5fa;">給油履歴</span><span style="font-size:11px;color:#64748b;">この車両の記録</span>
+      </button>
+    </div>
+    <div id="crew-recent"></div>
+  </div>
+</div>
+
+<div class="screen" id="scr-fuel">
+  <div class="hdr">
+    <button class="back-btn" onclick="go('scr-crew')">‹</button>
+    <div><div class="hdr-title">給油入力</div><div class="hdr-sub" id="fuel-veh-label">-</div></div>
+  </div>
+  <div class="pad">
+    <div style="background:#1e3a5f;border-radius:12px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:13px;color:#94a3b8;">現在のタンク残量</span>
+      <span style="font-size:22px;font-weight:800;" id="fuel-tank-disp">-</span>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="lbl">車番（QR連動・自動入力）</div>
+      <div style="background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:13px 16px;font-size:15px;font-weight:700;color:#60a5fa;" id="fuel-veh-disp">-</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="lbl">乗務員名 <span class="req">*</span></div>
+      <input class="inp" id="driver-search" placeholder="名前を入力して検索…" oninput="filterDrivers()" autocomplete="off" style="margin-bottom:6px;"/>
+      <div id="driver-ok" class="driver-ok" style="display:none;">
+        <span id="driver-ok-name"></span>
+        <button onclick="clearDriver()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">×</button>
+      </div>
+      <div class="driver-list" id="driver-list"></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="lbl">給油量 <span class="req">*</span></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="number" inputmode="numeric" class="inp-num" id="fuel-liters" placeholder="例：50"/>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 16px;font-size:17px;font-weight:700;color:#94a3b8;flex-shrink:0;">リットル</div>
+      </div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <div class="lbl">給油キャップ確認 <span class="req">*</span></div>
+      <button class="cap-btn" id="cap-btn" onclick="toggleCap()">
+        <div class="cap-chk" id="cap-chk"></div>
+        <div style="text-align:left;">
+          <div style="font-weight:700;font-size:15px;" id="cap-lbl">給油キャップを閉めた</div>
+          <div class="muted" style="margin-top:2px;">タップして確認チェック</div>
+        </div>
+      </button>
+    </div>
+    <div class="err-box" id="fuel-err"></div>
+    <button class="btn-primary" onclick="submitFuel()">⛽ 給油を記録する</button>
+  </div>
+</div>
+
+<div class="screen" id="scr-crew-hist">
+  <div class="hdr">
+    <button class="back-btn" onclick="go('scr-crew')">‹</button>
+    <div><div class="hdr-title">給油履歴</div><div class="hdr-sub" id="crew-hist-label">-</div></div>
+  </div>
+  <div class="pad" id="crew-hist-list"></div>
+</div>
+
+<div class="screen" id="scr-login">
+  <div class="hdr">
+    <button class="back-btn" onclick="go('scr-top')">‹</button>
+    <div class="hdr-title">管理者ログイン</div>
+  </div>
+  <div class="pad" style="padding-top:48px;text-align:center;">
+    <div style="font-size:52px;margin-bottom:16px;">🔒</div>
+    <div style="font-weight:700;font-size:18px;margin-bottom:6px;">管理者PINを入力</div>
+    <div class="muted" style="margin-bottom:28px;">デモPIN: 1234</div>
+    <input type="password" inputmode="numeric" class="inp-num" id="admin-pin" placeholder="●●●●" style="margin-bottom:16px;letter-spacing:12px;" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button class="btn-primary" onclick="doLogin()">ログイン</button>
+  </div>
+</div>
+
+<div class="screen" id="scr-admin">
+  <div class="hdr" style="justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="back-btn" onclick="go('scr-top');adminOk=false;">‹</button>
+      <div class="hdr-title">管理者画面</div>
+    </div>
+    <span class="badge exp-ok">認証済</span>
+  </div>
+  <div style="overflow-x:auto;background:#0a1628;border-bottom:1px solid #1e293b;position:sticky;top:57px;z-index:40;-webkit-overflow-scrolling:touch;">
+    <div style="display:flex;min-width:max-content;">
+      <button class="tab-item active" id="tab-fuel-btn" onclick="switchTab('fuel')"><span class="tab-icon">⛽</span><span class="tab-label">給油</span></button>
+      <button class="tab-item" id="tab-tank-btn" onclick="switchTab('tank')"><span class="tab-icon">🛢️</span><span class="tab-label">タンク</span></button>
+      <button class="tab-item" id="tab-inspect-btn" onclick="switchTab('inspect')"><span class="tab-icon">🔧</span><span class="tab-label">整備・車検</span></button>
+      <button class="tab-item" id="tab-vehicle-btn" onclick="switchTab('vehicle')"><span class="tab-icon">🚛</span><span class="tab-label">車両</span></button>
+      <button class="tab-item" id="tab-driver-btn" onclick="switchTab('driver')"><span class="tab-icon">👤</span><span class="tab-label">ドライバー</span></button>
+      <button class="tab-item" id="tab-qr-btn" onclick="switchTab('qr')"><span class="tab-icon">📱</span><span class="tab-label">QR</span></button>
+      <button class="tab-item" id="tab-settings-btn" onclick="switchTab('settings')"><span class="tab-icon">⚙️</span><span class="tab-label">設定</span></button>
+    </div>
+  </div>
+
+  <div id="tab-fuel" class="pad">
+    <div class="section-title">給油統計</div>
+    <div class="row2" id="admin-fuel-stats"></div>
+    <div class="section-title" style="margin-top:12px;">全車両 給油履歴</div>
+    <div class="card" id="admin-fuel-list"></div>
+  </div>
+
+  <div id="tab-tank" class="pad" style="display:none;">
+    <div id="admin-tank-gauge"></div>
+    <div class="form-section">
+      <div class="form-title">🛢️ タンク補充を記録</div>
+      <div style="background:#0f172a;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center;">
+        <div style="font-size:12px;color:#64748b;margin-bottom:4px;">補充後の残量</div>
+        <div style="font-size:32px;font-weight:800;color:#22c55e;">1,800<span style="font-size:16px;color:#64748b;margin-left:4px;">L（満タン）</span></div>
+      </div>
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#f59e0b;line-height:1.6;">
+        ⚠ タンクへの補充は常に満タン(1,800L)です。<br>ボタンを押すと残量が1,800Lにリセットされます。
+      </div>
+      <input class="inp" id="tank-note" placeholder="メモ（例：業者名・日付など）" autocomplete="off" style="margin-bottom:12px;"/>
+      <button onclick="submitTank()" style="width:100%;background:#16a34a;border:none;border-radius:14px;padding:18px;font-size:17px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;">🛢️ 満タン補充を記録する（1,800L）</button>
+    </div>
+    <div class="section-title">補充履歴</div>
+    <div class="card" id="tank-log-list"></div>
+  </div>
+
+  <div id="tab-inspect" class="pad" style="display:none;">
+    <div id="inspect-alerts"></div>
+    <div class="form-section">
+      <div class="form-title">➕ 整備・車検を登録</div>
+      <div class="lbl">車両</div>
+      <select class="inp" id="ins-veh" style="margin-bottom:10px;"></select>
+      <div class="lbl">種別</div>
+      <select class="inp" id="ins-type" style="margin-bottom:10px;">
+        <option>車検</option><option>法定12ヶ月点検</option><option>法定6ヶ月点検</option>
+        <option>定期整備</option><option>タイヤ交換</option><option>オイル交換</option>
+        <option>ブレーキ整備</option><option>その他修理</option>
+      </select>
+      <div class="row2" style="margin-bottom:10px;">
+        <div><div class="lbl">実施日 <span class="req">*</span></div><input type="date" class="inp" id="ins-date"/></div>
+        <div><div class="lbl">次回予定日</div><input type="date" class="inp" id="ins-next"/></div>
+      </div>
+      <div class="lbl">費用（円）</div>
+      <input type="number" inputmode="numeric" class="inp" id="ins-cost" placeholder="例：32000" style="margin-bottom:10px;"/>
+      <div class="lbl">メモ</div>
+      <input class="inp" id="ins-memo" placeholder="作業内容など" autocomplete="off" style="margin-bottom:12px;"/>
+      <button class="btn-blue" onclick="submitInspect()">登録する</button>
+    </div>
+    <div class="section-title">整備・車検履歴</div>
+    <div id="inspect-list"></div>
+  </div>
+
+  <div id="tab-vehicle" class="pad" style="display:none;">
+    <div class="form-section">
+      <div class="form-title">➕ 車両を登録</div>
+      <button onclick="startOcr('vehicle')" style="width:100%;background:linear-gradient(135deg,#1e3a5f,#1e293b);border:1.5px solid #3b82f6;border-radius:12px;padding:14px;color:#60a5fa;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;">
+        📷 車検証をカメラで読み取る（自動入力）
+      </button>
+      <input type="file" id="ocr-vehicle-input" accept="image/*" capture="environment" style="display:none;" onchange="processOcr(this,'vehicle')"/>
+      <div class="ocr-status" id="ocr-vehicle-status"></div>
+      <div class="ocr-debug" id="ocr-vehicle-debug"></div>
+      <div class="lbl" style="margin-top:10px;">車番（ナンバープレート）<span class="req">*</span></div>
+      <input class="inp" id="veh-num" placeholder="例：品川300あ1234" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="lbl">車両名・型式</div>
+      <input class="inp" id="veh-model" placeholder="例：トヨタ ダイナ 2t" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="row2" style="margin-bottom:10px;">
+        <div><div class="lbl">年式</div><input type="number" class="inp" id="veh-year" placeholder="2022"/></div>
+        <div><div class="lbl">燃料</div>
+          <select class="inp" id="veh-fuel"><option>軽油</option><option>ガソリン</option><option>電気</option><option>ハイブリッド</option></select>
+        </div>
+      </div>
+      <button class="btn-blue" onclick="submitVehicle()">登録する</button>
+    </div>
+    <div class="section-title">登録車両一覧</div>
+    <div style="background:#1e293b;border-radius:14px;overflow:hidden;" id="admin-veh-list"></div>
+  </div>
+
+  <div id="tab-driver" class="pad" style="display:none;">
+    <div id="driver-alerts"></div>
+    <div class="form-section">
+      <div class="form-title">➕ ドライバーを登録</div>
+      <button onclick="startOcr('license')" style="width:100%;background:linear-gradient(135deg,#1e3a5f,#1e293b);border:1.5px solid #3b82f6;border-radius:12px;padding:14px;color:#60a5fa;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px;">
+        📷 免許証をカメラで読み取る（自動入力）
+      </button>
+      <div style="font-size:11px;color:#64748b;margin-bottom:8px;text-align:center;">明るい場所で免許証を真上から撮影してください</div>
+      <input type="file" id="ocr-license-input" accept="image/*" capture="environment" style="display:none;" onchange="processOcr(this,'license')"/>
+      <div class="ocr-status" id="ocr-license-status"></div>
+      <div class="ocr-debug" id="ocr-license-debug"></div>
+      <div class="lbl" style="margin-top:10px;">氏名 <span class="req">*</span></div>
+      <input class="inp" id="drv-name" placeholder="例：田中 太郎" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="row2" style="margin-bottom:10px;">
+        <div><div class="lbl">生年月日</div><input type="date" class="inp" id="drv-birth"/></div>
+        <div><div class="lbl">電話番号</div><input class="inp" id="drv-tel" placeholder="090-0000-0000"/></div>
+      </div>
+      <div class="lbl">住所</div>
+      <input class="inp" id="drv-addr" placeholder="例：愛知県名古屋市〇〇区" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="lbl">免許証番号</div>
+      <input class="inp" id="drv-license-num" placeholder="例：123456789012（12桁）" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="row2" style="margin-bottom:10px;">
+        <div><div class="lbl">交付日</div><input type="date" class="inp" id="drv-issue"/></div>
+        <div><div class="lbl">免許有効期限 <span class="req">*</span></div><input type="date" class="inp" id="drv-exp"/></div>
+      </div>
+      <div class="lbl">免許の条件等</div>
+      <input class="inp" id="drv-condition" placeholder="例：眼鏡等" autocomplete="off" style="margin-bottom:10px;"/>
+      <div class="lbl">免許種別</div>
+      <select class="inp" id="drv-lic" style="margin-bottom:10px;">
+        <option>普通</option><option>準中型</option><option>中型</option><option>大型</option><option>普通・中型</option><option>普通・大型</option>
+      </select>
+      <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+        <div style="font-size:12px;color:#60a5fa;font-weight:700;margin-bottom:8px;">🚗 自家用車 任意保険（管理者入力）</div>
+        <div class="row2">
+          <div><div class="lbl">保険期限 <span class="req">*</span></div><input type="date" class="inp" id="drv-ins-exp"/></div>
+          <div><div class="lbl">保険会社</div><input class="inp" id="drv-ins-company" placeholder="例：東京海上"/></div>
+        </div>
+      </div>
+      <button class="btn-blue" onclick="submitDriver()">登録する</button>
+    </div>
+    <div class="section-title">ドライバー一覧</div>
+    <div id="driver-list-admin"></div>
+  </div>
+
+  <div id="tab-qr" class="pad" style="display:none;">
+    <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd;line-height:1.7;">
+      各車両のQRコードを印刷し車内に貼付してください。<br>乗務員がスマートフォンで読み取ると給油画面が直接開きます。
+    </div>
+    <select class="inp" id="qr-select" onchange="renderQrBig()" style="margin-bottom:16px;font-size:14px;"></select>
+    <div style="background:#1e293b;border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;">
+      <div style="display:inline-block;padding:16px;background:#fff;border-radius:12px;margin-bottom:14px;"><div id="qr-big" style="width:220px;height:220px;"></div></div>
+      <div style="font-weight:800;font-size:19px;" id="qr-veh-num">-</div>
+      <div class="muted" style="margin:4px 0 8px;" id="qr-veh-model">-</div>
+      <div style="background:#0f172a;border-radius:8px;padding:8px 12px;font-size:11px;color:#475569;word-break:break-all;margin-bottom:12px;" id="qr-url-disp">-</div>
+      <button onclick="printQr()" style="width:100%;background:#334155;border:none;border-radius:10px;padding:12px;color:#f1f5f9;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">🖨️ この車両のQRを印刷</button>
+    </div>
+    <div class="section-title">全車両（タップで拡大）</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="qr-grid"></div>
+  </div>
+
+  <div id="tab-settings" class="pad" style="display:none;">
+    <div class="form-section">
+      <div class="form-title">🔒 管理者PIN変更</div>
+      <div class="lbl">現在のPIN</div>
+      <input type="password" inputmode="numeric" class="inp" id="pin-current" placeholder="現在のPIN" style="margin-bottom:10px;"/>
+      <div class="lbl">新しいPIN（4桁以上）</div>
+      <input type="password" inputmode="numeric" class="inp" id="pin-new" placeholder="新しいPIN" style="margin-bottom:10px;"/>
+      <div class="lbl">新しいPIN（確認）</div>
+      <input type="password" inputmode="numeric" class="inp" id="pin-confirm" placeholder="もう一度入力" style="margin-bottom:12px;"/>
+      <button class="btn-blue" onclick="changePin()">PINを変更する</button>
+    </div>
+    <div class="form-section">
+      <div class="form-title">📸 OCRカメラ設定（免許証・車検証読み取り）</div>
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#22c55e;line-height:1.7;">
+        ✅ Gemini API対応済み<br>
+        取得したAPIキー（AIzaSy...形式）を設定してください。
+      </div>
+      <div class="lbl">Gemini APIキー</div>
+
+    </div>
+    <div class="form-section">
+      <div class="form-title">💾 データバックアップ</div>
+      <div class="muted" style="margin-bottom:12px;line-height:1.6;">全データをJSONファイルとしてダウンロードできます。</div>
+      <button class="btn-blue" onclick="exportBackup()" style="margin-bottom:10px;">📤 バックアップをダウンロード</button>
+      <button class="btn-blue" onclick="document.getElementById('import-file').click()">📥 バックアップから復元</button>
+      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importBackupFile(this)"/>
+    </div>
+    <div class="form-section">
+      <div class="form-title" style="color:#ef4444;">⚠️ データリセット</div>
+      <div class="muted" style="margin-bottom:12px;line-height:1.6;">全データを削除します。この操作は元に戻せません。</div>
+      <button class="btn-danger" onclick="resetAllData()">全データを削除する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TANK_MAX=1800;
+const DRIVERS_INIT=['田中 太郎','鈴木 花子','佐藤 一郎','山田 次郎','伊藤 三郎','渡辺 四郎','中村 五郎','小林 六子','加藤 七海','吉田 八郎','山本 九子','松本 十郎','井上 咲','木村 恵','林 翔','清水 蓮','山崎 陽','池田 葵','橋本 凛','石川 颯'];
+const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
+let tankStock=ld('tankStock',1560),fuelLogs=ld('fuelLogs',[]),tankLogs=ld('tankLogs',[]),vehicles=ld('vehicles',[]),inspects=ld('inspects',[]),driverList=ld('driverList',[]);
+let currentVeh=null,capOn=false,selDriver='',adminOk=false,curTab='fuel';
+
+async function syncFromFirebase(){
+  if(!window.FB)return;
+  try{
+    const[v,d,f,t,i,s]=await Promise.all([window.FB.fbGetAll(window.FB.COL.vehicles),window.FB.fbGetAll(window.FB.COL.drivers),window.FB.fbGetAll(window.FB.COL.fuelLogs),window.FB.fbGetAll(window.FB.COL.tankLogs),window.FB.fbGetAll(window.FB.COL.inspects),window.FB.fbGetSetting('tankStock')]);
+    if(v.length){vehicles=v;sv('vehicles',v);}
+    if(d.length){driverList=d;sv('driverList',d);}
+    if(f.length){fuelLogs=f.sort((a,b)=>b.date?.localeCompare(a.date||'')||0);sv('fuelLogs',fuelLogs);}
+    if(t.length){tankLogs=t.sort((a,b)=>b.date?.localeCompare(a.date||'')||0);sv('tankLogs',tankLogs);}
+    if(i.length){inspects=i;sv('inspects',i);}
+    if(s!==null){tankStock=s;sv('tankStock',s);}
+    go('scr-top');
+  }catch(e){console.warn('Firebase sync failed',e);}
+}
+window.addEventListener('fbReady',()=>{
+  syncFromFirebase();
+  if(window.FB){window.FB.onSnapshot(window.FB.collection(window.FB.db,window.FB.COL.fuelLogs),snap=>{fuelLogs=snap.docs.map(d=>({...d.data(),_id:d.id})).sort((a,b)=>b.date?.localeCompare(a.date||'')||0);sv('fuelLogs',fuelLogs);if(document.getElementById('scr-top')?.classList.contains('active'))renderTop();if(document.getElementById('scr-crew')?.classList.contains('active'))renderCrew();if(document.getElementById('tab-fuel')?.style.display!=='none')renderAdminFuel();});}
+});
+
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
+const daysLeft=ds=>{const diff=new Date(ds)-new Date(today());return Math.ceil(diff/86400000);};
+const expiryBadge=ds=>{const d=daysLeft(ds);if(d<0)return`<span class="badge exp-ng">期限切れ</span>`;if(d<=30)return`<span class="badge exp-ng">残${d}日 ⚠</span>`;if(d<=90)return`<span class="badge exp-warn">残${d}日</span>`;return`<span class="badge exp-ok">有効</span>`;};
+const vName=id=>{const v=vehicles.find(x=>x.id===id);return v?v.number:'不明';};
+let tTimer;
+function toast(msg,type='ok'){const el=document.getElementById('toast');el.textContent=(type==='ok'?'✓ ':'✕ ')+msg;el.className=`toast ${type} show`;clearTimeout(tTimer);tTimer=setTimeout(()=>el.classList.remove('show'),2500);}
+
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0);const r={'scr-top':renderTop,'scr-crew':renderCrew,'scr-fuel':renderFuel,'scr-crew-hist':renderCrewHist,'scr-admin':renderAdmin};if(r[id])r[id]();}
+function showAdmin(){if(adminOk)go('scr-admin');else go('scr-login');}
+
+function gaugeHtml(cur,max){const p=Math.max(0,Math.min(100,cur/max*100));const c=p>50?'#22c55e':p>25?'#f59e0b':'#ef4444';const l=p>50?'残量十分':p>25?'残量注意':'⚠ 残量不足';return`<div class="gauge-wrap"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;color:#94a3b8;font-weight:600;">倉庫タンク残量</span><span class="badge" style="background:${c}22;color:${c};">${l}</span></div><div style="font-size:38px;font-weight:800;color:${c};line-height:1;margin-bottom:4px;">${cur.toLocaleString()}<span style="font-size:16px;font-weight:500;color:#64748b;margin-left:4px;">L</span></div><div style="font-size:11px;color:#64748b;margin-bottom:10px;">満タン ${max.toLocaleString()}L</div><div class="gauge-bg"><div class="gauge-bar" style="width:${p}%;background:linear-gradient(90deg,${c}88,${c});"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:10px;color:#475569;">0L</span><span style="font-size:10px;color:#475569;">${p.toFixed(0)}%</span><span style="font-size:10px;color:#475569;">${max.toLocaleString()}L</span></div></div>`;}
+
+function renderTop(){document.getElementById('top-gauge').innerHTML=gaugeHtml(tankStock,TANK_MAX);document.getElementById('veh-list').innerHTML=vehicles.map(v=>{const tot=fuelLogs.filter(l=>l.vehicleId===v.id).reduce((a,b)=>a+b.liters,0);return`<button class="veh-btn" onclick="selVeh(${v.id})"><div><div style="font-weight:700;font-size:14px;">${v.number}</div><div class="muted">${v.model||''}</div></div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#f59e0b;font-weight:600;">${tot}L給油済</span><span style="color:#334155;font-size:20px;">›</span></div></button>`;}).join('');}
+function selVeh(id){currentVeh=vehicles.find(v=>v.id===id);go('scr-crew');}
+
+function renderCrew(){if(!currentVeh)return;document.getElementById('crew-num').textContent=currentVeh.number;document.getElementById('crew-name').textContent=currentVeh.model||'';document.getElementById('crew-gauge').innerHTML=gaugeHtml(tankStock,TANK_MAX);const rec=fuelLogs.filter(l=>l.vehicleId===currentVeh.id).slice(0,3);document.getElementById('crew-recent').innerHTML=rec.length?`<div class="card"><div class="section-title" style="margin-top:0;">この車両の直近給油</div>${rec.map(l=>`<div class="log-row"><div><div style="font-size:14px;font-weight:600;">${l.driver}</div><div class="muted">${l.date}</div></div><div style="text-align:right;"><div style="font-size:20px;font-weight:800;color:#f59e0b;">${l.liters}L</div><div style="font-size:10px;color:#22c55e;">✓キャップ確認済</div></div></div>`).join('')}</div>`:'';}
+
+function renderFuel(){if(!currentVeh)return;document.getElementById('fuel-veh-label').textContent=currentVeh.number;document.getElementById('fuel-veh-disp').textContent=`${currentVeh.number}　${currentVeh.model||''}`;const c=tankStock<450?'#ef4444':'#22c55e';document.getElementById('fuel-tank-disp').textContent=`${tankStock.toLocaleString()}L`;document.getElementById('fuel-tank-disp').style.color=c;capOn=false;selDriver='';document.getElementById('fuel-liters').value='';document.getElementById('driver-search').value='';document.getElementById('fuel-err').style.display='none';document.getElementById('cap-btn').className='cap-btn';document.getElementById('cap-chk').textContent='';document.getElementById('cap-lbl').style.color='#f1f5f9';document.getElementById('driver-ok').style.display='none';filterDrivers();}
+function filterDrivers(){if(selDriver)return;const q=document.getElementById('driver-search').value;const names=driverList.map(d=>d.name).concat(DRIVERS_INIT.filter(n=>!driverList.find(d=>d.name===n)));const res=names.filter(n=>n.includes(q));document.getElementById('driver-list').innerHTML=res.length?res.map(n=>`<button class="driver-item" onclick="selDrv('${n}')">${n}</button>`).join(''):`<div class="muted" style="padding:14px;text-align:center;">該当者なし</div>`;}
+function selDrv(n){selDriver=n;document.getElementById('driver-search').value=n;document.getElementById('driver-ok-name').textContent=n;document.getElementById('driver-ok').style.display='flex';document.getElementById('driver-list').innerHTML='';}
+function clearDriver(){selDriver='';document.getElementById('driver-search').value='';document.getElementById('driver-ok').style.display='none';filterDrivers();}
+function toggleCap(){capOn=!capOn;document.getElementById('cap-btn').className='cap-btn'+(capOn?' on':'');document.getElementById('cap-chk').textContent=capOn?'✓':'';document.getElementById('cap-lbl').style.color=capOn?'#22c55e':'#f1f5f9';}
+function showErr(msg){const el=document.getElementById('fuel-err');el.textContent='⚠️ '+msg;el.style.display='block';}
+function submitFuel(){const L=parseFloat(document.getElementById('fuel-liters').value);if(!selDriver){showErr('乗務員名を選択してください');return;}if(!L||L<=0){showErr('給油量を入力してください');return;}if(L>tankStock){showErr(`タンク残量(${tankStock}L)を超えています`);return;}if(!capOn){showErr('給油キャップの確認チェックが必要です');return;}document.getElementById('fuel-err').style.display='none';const now=new Date();const ds=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;const id=Date.now();const log={id,vehicleId:currentVeh.id,driver:selDriver,liters:L,date:ds,capChecked:true};fuelLogs.unshift(log);tankStock-=L;sv('fuelLogs',fuelLogs);sv('tankStock',tankStock);if(window.FB){window.FB.fbSet(window.FB.COL.fuelLogs,id,log);window.FB.fbSetSetting('tankStock',tankStock);}toast('給油記録を送信しました');go('scr-crew');}
+
+function renderCrewHist(){if(!currentVeh)return;document.getElementById('crew-hist-label').textContent=currentVeh.number;const logs=fuelLogs.filter(l=>l.vehicleId===currentVeh.id);document.getElementById('crew-hist-list').innerHTML=logs.length?logs.map(l=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-weight:700;font-size:15px;">${l.driver}</div><div class="muted">${l.date}</div></div><div style="text-align:right;"><div style="font-size:26px;font-weight:800;color:#f59e0b;">${l.liters}L</div><div style="font-size:11px;color:#22c55e;">✓キャップ確認済</div></div></div></div>`).join(''):`<div style="text-align:center;color:#475569;padding:60px 0;">給油記録がありません</div>`;}
+
+function doLogin(){const pin=document.getElementById('admin-pin').value;const stored=localStorage.getItem('adminPin')||'1234';if(pin===stored){adminOk=true;document.getElementById('admin-pin').value='';go('scr-admin');}else{document.getElementById('admin-pin').value='';toast('PINが正しくありません','ng');}}
+
+function switchTab(name){curTab=name;['fuel','tank','inspect','vehicle','driver','qr','settings'].forEach(t=>{const el=document.getElementById(`tab-${t}`);const btn=document.getElementById(`tab-${t}-btn`);if(el)el.style.display=t===name?'block':'none';if(btn)btn.className='tab-item'+(t===name?' active':'');});if(name==='fuel')renderAdminFuel();if(name==='tank')renderAdminTank();if(name==='inspect')renderAdminInspect();if(name==='vehicle')renderAdminVehicle();if(name==='driver')renderAdminDriver();if(name==='qr')renderAdminQr();if(name==='settings')renderAdminSettings();}
+function renderAdmin(){switchTab('fuel');}
+
+function renderAdminFuel(){const total=fuelLogs.reduce((a,b)=>a+b.liters,0);document.getElementById('admin-fuel-stats').innerHTML=`<div class="card"><div class="muted">累計給油量</div><div style="font-size:22px;font-weight:800;color:#f59e0b;margin-top:4px;">${total.toLocaleString()}L</div></div><div class="card"><div class="muted">給油件数</div><div style="font-size:22px;font-weight:800;color:#60a5fa;margin-top:4px;">${fuelLogs.length}件</div></div>`;document.getElementById('admin-fuel-list').innerHTML=fuelLogs.length?fuelLogs.map(l=>`<div class="log-row"><div><div style="font-size:13px;font-weight:700;">${vName(l.vehicleId)}</div><div class="muted">${l.driver}　${l.date}</div></div><div style="font-size:18px;font-weight:800;color:#f59e0b;">${l.liters}L</div></div>`).join(''):`<div class="muted" style="padding:12px;text-align:center;">記録がありません</div>`;}
+
+function renderAdminTank(){document.getElementById('admin-tank-gauge').innerHTML=gaugeHtml(tankStock,TANK_MAX);document.getElementById('tank-log-list').innerHTML=tankLogs.length?tankLogs.map(l=>`<div class="log-row"><div><div style="font-size:13px;font-weight:600;">${l.note}</div><div class="muted">${l.date}</div></div><div style="font-size:18px;font-weight:800;color:#60a5fa;">+${l.liters.toLocaleString()}L</div></div>`).join(''):`<div class="muted" style="padding:12px;text-align:center;">記録がありません</div>`;}
+function submitTank(){const note=document.getElementById('tank-note').value||'満タン補充';const before=tankStock;tankStock=TANK_MAX;const id=Date.now();const log={id,liters:TANK_MAX,added:TANK_MAX-before,date:today(),note};tankLogs.unshift(log);sv('tankStock',tankStock);sv('tankLogs',tankLogs);if(window.FB){window.FB.fbSet(window.FB.COL.tankLogs,id,log);window.FB.fbSetSetting('tankStock',tankStock);}document.getElementById('tank-note').value='';toast('タンクを満タン(1,800L)にリセットしました');renderAdminTank();}
+
+function renderAdminInspect(){const sel=document.getElementById('ins-veh');sel.innerHTML=vehicles.map(v=>`<option value="${v.id}">${v.number}</option>`).join('');const warns=inspects.filter(i=>i.nextDate&&daysLeft(i.nextDate)<=90).sort((a,b)=>daysLeft(a.nextDate)-daysLeft(b.nextDate));document.getElementById('inspect-alerts').innerHTML=warns.length?`<div class="warn-banner" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;color:#fca5a5;margin-bottom:8px;">⚠ 期限が近い整備・車検</div>${warns.map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(239,68,68,.2);"><div><span style="font-size:13px;font-weight:600;">${vName(i.vehicleId)}</span> <span class="muted">${i.type}</span></div><div style="display:flex;align-items:center;gap:8px;"><span class="muted">${i.nextDate}</span>${expiryBadge(i.nextDate)}</div></div>`).join('')}</div>`:'';document.getElementById('inspect-list').innerHTML=inspects.length?inspects.map(i=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><span style="background:#1e3a5f;color:#60a5fa;border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;">${i.type}</span><div style="font-weight:700;font-size:15px;margin-top:6px;">${vName(i.vehicleId)}</div></div><div style="font-size:20px;font-weight:800;color:#f59e0b;">¥${(i.cost||0).toLocaleString()}</div></div><div class="row2"><div style="background:#0f172a;border-radius:8px;padding:8px 10px;"><div class="muted">実施日</div><div style="font-size:13px;font-weight:600;margin-top:2px;">${i.date}</div></div><div style="background:#0f172a;border-radius:8px;padding:8px 10px;"><div class="muted">次回予定</div><div style="font-size:13px;font-weight:600;margin-top:2px;">${i.nextDate||'未設定'} ${i.nextDate?expiryBadge(i.nextDate):''}</div></div></div>${i.memo?`<div class="muted" style="margin-top:8px;font-size:12px;">${i.memo}</div>`:''}</div>`).join(''):`<div style="text-align:center;color:#475569;padding:40px 0;">記録がありません</div>`;}
+function submitInspect(){const date=document.getElementById('ins-date').value;if(!date){toast('実施日を入力してください','ng');return;}const id=Date.now();const rec={id,vehicleId:parseInt(document.getElementById('ins-veh').value),type:document.getElementById('ins-type').value,date,nextDate:document.getElementById('ins-next').value,cost:parseFloat(document.getElementById('ins-cost').value)||0,memo:document.getElementById('ins-memo').value};inspects.unshift(rec);sv('inspects',inspects);if(window.FB){window.FB.fbSet(window.FB.COL.inspects,id,rec);}document.getElementById('ins-date').value='';document.getElementById('ins-next').value='';document.getElementById('ins-cost').value='';document.getElementById('ins-memo').value='';toast('整備記録を登録しました');renderAdminInspect();}
+
+function renderAdminVehicle(){document.getElementById('admin-veh-list').innerHTML=vehicles.map(v=>{const lastFuel=fuelLogs.filter(l=>l.vehicleId===v.id)[0];const nextIns=inspects.filter(i=>i.vehicleId===v.id&&i.nextDate).sort((a,b)=>new Date(a.nextDate)-new Date(b.nextDate))[0];return`<div class="veh-btn" style="flex-direction:column;align-items:flex-start;gap:8px;cursor:default;"><div style="display:flex;justify-content:space-between;width:100%;"><div><div style="font-weight:800;font-size:15px;">${v.number}</div><div class="muted">${v.model||''} ${v.year?v.year+'年':''} ${v.fuel||''}</div></div></div><div class="row2" style="width:100%;"><div style="background:#0f172a;border-radius:8px;padding:8px 10px;"><div class="muted">最終給油</div><div style="font-size:12px;font-weight:600;margin-top:2px;">${lastFuel?lastFuel.date.slice(0,10):'なし'}</div></div><div style="background:#0f172a;border-radius:8px;padding:8px 10px;"><div class="muted">次回整備</div><div style="font-size:12px;font-weight:600;margin-top:2px;">${nextIns?nextIns.nextDate+' '+expiryBadge(nextIns.nextDate):'未設定'}</div></div></div></div>`;}).join('');}
+function submitVehicle(){const num=document.getElementById('veh-num').value.trim();if(!num){toast('車番を入力してください','ng');return;}const id=Date.now();const veh={id,number:num,model:document.getElementById('veh-model').value.trim(),year:parseInt(document.getElementById('veh-year').value)||null,fuel:document.getElementById('veh-fuel').value};vehicles.push(veh);sv('vehicles',vehicles);if(window.FB){window.FB.fbSet(window.FB.COL.vehicles,id,veh);}document.getElementById('veh-num').value='';document.getElementById('veh-model').value='';document.getElementById('veh-year').value='';toast('車両を登録しました');renderAdminVehicle();}
+
+function renderAdminDriver(){const warns=driverList.filter(d=>daysLeft(d.expiry)<=90).sort((a,b)=>daysLeft(a.expiry)-daysLeft(b.expiry));document.getElementById('driver-alerts').innerHTML=warns.length?`<div class="warn-banner" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;color:#fca5a5;margin-bottom:8px;">⚠ 免許期限が近いドライバー</div>${warns.map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(239,68,68,.2);"><span style="font-size:13px;font-weight:600;">${d.name}</span><div style="display:flex;align-items:center;gap:8px;"><span class="muted">${d.expiry}</span>${expiryBadge(d.expiry)}</div></div>`).join('')}</div>`:'';document.getElementById('driver-list-admin').innerHTML=driverList.length?driverList.map(d=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div><div style="font-weight:700;font-size:15px;">${d.name}</div><div class="muted">${d.license}免許　${d.tel||''}</div></div>${expiryBadge(d.expiry)}</div><div style="background:#0f172a;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;"><span class="muted">免許有効期限</span><span style="font-size:13px;font-weight:600;">${d.expiry}</span></div></div>`).join(''):`<div style="text-align:center;color:#475569;padding:40px 0;">登録がありません</div>`;}
+function submitDriver(){const name=document.getElementById('drv-name').value.trim();const exp=document.getElementById('drv-exp').value;const insExp=document.getElementById('drv-ins-exp').value;if(!name){toast('氏名を入力してください','ng');return;}if(!exp){toast('免許有効期限を入力してください','ng');return;}const id=Date.now();const drv={id,name,license:document.getElementById('drv-lic').value,expiry:exp,tel:document.getElementById('drv-tel').value.trim(),licenseNumber:document.getElementById('drv-license-num').value.trim(),insuranceExpiry:insExp,insuranceCompany:document.getElementById('drv-ins-company').value.trim(),birth:document.getElementById('drv-birth').value,addr:document.getElementById('drv-addr').value.trim(),issue:document.getElementById('drv-issue').value,condition:document.getElementById('drv-condition').value.trim()};driverList.push(drv);sv('driverList',driverList);if(window.FB){window.FB.fbSet(window.FB.COL.drivers,id,drv);}document.getElementById('drv-name').value='';document.getElementById('drv-exp').value='';document.getElementById('drv-tel').value='';document.getElementById('drv-license-num').value='';document.getElementById('drv-ins-exp').value='';document.getElementById('drv-ins-company').value='';document.getElementById('drv-birth').value='';document.getElementById('drv-addr').value='';document.getElementById('drv-issue').value='';document.getElementById('drv-condition').value='';toast('ドライバーを登録しました');renderAdminDriver();}
+
+let qrCurrentVeh=null;
+function renderAdminQr(){const sel=document.getElementById('qr-select');sel.innerHTML='';vehicles.forEach(v=>{const o=document.createElement('option');o.value=v.number;o.textContent=`${v.number} — ${v.model||''}`;sel.appendChild(o);});if(vehicles.length)renderQrBig();}
+function getQrUrl(num){const base=location.origin+location.pathname;return`${base}?car=${encodeURIComponent(num)}`;}
+function renderQrBig(){const num=document.getElementById('qr-select').value;const v=vehicles.find(x=>x.number===num)||{number:num,model:''};qrCurrentVeh=v;document.getElementById('qr-veh-num').textContent=v.number;document.getElementById('qr-veh-model').textContent=v.model||'';document.getElementById('qr-url-disp').textContent=getQrUrl(v.number);const container=document.getElementById('qr-big');container.innerHTML='';if(typeof QRCode!=='undefined'){new QRCode(container,{text:getQrUrl(v.number),width:220,height:220,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}const grid=document.getElementById('qr-grid');grid.innerHTML=vehicles.map(vv=>`<div onclick="document.getElementById('qr-select').value='${vv.number}';renderQrBig();" style="background:${vv.number===num?'#1e3a5f':'#1e293b'};border:2px solid ${vv.number===num?'#3b82f6':'transparent'};border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;"><div style="display:inline-block;padding:4px;background:#fff;border-radius:4px;margin-bottom:4px;" id="qr-mini-${vv.id}"></div><div style="font-size:10px;font-weight:700;color:${vv.number===num?'#60a5fa':'#f1f5f9'}">${vv.number}</div></div>`).join('');vehicles.forEach((vv,i)=>{setTimeout(()=>{const el=document.getElementById(`qr-mini-${vv.id}`);if(el&&!el.querySelector('canvas')&&typeof QRCode!=='undefined'){new QRCode(el,{text:getQrUrl(vv.number),width:56,height:56,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}},i*30);});}
+function printQr(){if(!qrCurrentVeh)return;const url=getQrUrl(qrCurrentVeh.number);const w=window.open('','_blank');w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>${qrCurrentVeh.number} QR</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;font-family:'Hiragino Sans',sans-serif;}.wrap{text-align:center;padding:24px;}.qr{padding:20px;background:#fff;border:3px solid #000;display:inline-block;margin-bottom:14px;}.num{font-size:20px;font-weight:900;margin-bottom:4px;}.url{font-size:9px;color:#666;word-break:break-all;max-width:280px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><div class="wrap"><div class="qr" id="qr"></div><div class="num">${qrCurrentVeh.number}</div><div style="font-size:13px;color:#666;">${qrCurrentVeh.model||''}</div><div class="url">${url}</div><div style="font-size:10px;color:#999;margin-top:6px;">新給車両管理システム</div></div><script>new QRCode(document.getElementById('qr'),{text:'${url}',width:300,height:300,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});setTimeout(()=>window.print(),700);<\/script></body></html>`);w.document.close();}
+
+function renderAdminSettings(){const key=localStorage.getItem('geminiApiKey')||'';const inp=document.getElementById('gemini-key');if(inp)inp.value=key?'●●●●●●●●（設定済）':'';const status=document.getElementById('gemini-key-status');if(status){status.textContent=key?'✓ APIキーが設定されています':'APIキーが未設定です';status.style.color=key?'#22c55e':'#f59e0b';}}
+function saveGeminiKey(){const key=document.getElementById('gemini-key').value.trim();if(!key||key.startsWith('●')){toast('有効なAPIキーを入力してください','ng');return;}localStorage.setItem('geminiApiKey',key);toast('APIキーを保存しました');renderAdminSettings();}
+function changePin(){const cur=document.getElementById('pin-current').value;const n1=document.getElementById('pin-new').value;const n2=document.getElementById('pin-confirm').value;const stored=localStorage.getItem('adminPin')||'1234';if(cur!==stored){toast('現在のPINが正しくありません','ng');return;}if(n1.length<4){toast('新しいPINは4桁以上で入力してください','ng');return;}if(n1!==n2){toast('新しいPINが一致しません','ng');return;}localStorage.setItem('adminPin',n1);document.getElementById('pin-current').value='';document.getElementById('pin-new').value='';document.getElementById('pin-confirm').value='';toast('PINを変更しました');}
+function exportBackup(){const data={_exportedAt:new Date().toISOString(),_version:'1.0',vehicles:JSON.parse(localStorage.getItem('vehicles')||'[]'),driverList:JSON.parse(localStorage.getItem('driverList')||'[]'),fuelLogs:JSON.parse(localStorage.getItem('fuelLogs')||'[]'),tankLogs:JSON.parse(localStorage.getItem('tankLogs')||'[]'),tankStock:parseFloat(localStorage.getItem('tankStock')||'0'),inspects:JSON.parse(localStorage.getItem('inspects')||'[]')};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');const d=new Date();const p=n=>String(n).padStart(2,'0');a.download=`shinkyu_backup_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;a.href=url;a.click();URL.revokeObjectURL(url);toast('バックアップをダウンロードしました');}
+function importBackupFile(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const data=JSON.parse(e.target.result);if(data.vehicles)localStorage.setItem('vehicles',JSON.stringify(data.vehicles));if(data.driverList)localStorage.setItem('driverList',JSON.stringify(data.driverList));if(data.fuelLogs)localStorage.setItem('fuelLogs',JSON.stringify(data.fuelLogs));if(data.tankLogs)localStorage.setItem('tankLogs',JSON.stringify(data.tankLogs));if(data.tankStock!==undefined)localStorage.setItem('tankStock',data.tankStock);if(data.inspects)localStorage.setItem('inspects',JSON.stringify(data.inspects));toast('バックアップを復元しました');location.reload();}catch(err){toast('ファイルの形式が正しくありません','ng');}};reader.readAsText(file);}
+function resetAllData(){if(confirm('⚠️ 全データを削除します。\nこの操作は元に戻せません。\n本当によろしいですか？')){['vehicles','driverList','fuelLogs','tankLogs','tankStock','inspects'].forEach(k=>localStorage.removeItem(k));toast('全データを削除しました');setTimeout(()=>location.reload(),1000);}}
+
+// ════════════════════════════════
+// OCR機能 ── Tesseract.js（完全無料・APIキー不要）
+// ════════════════════════════════
+// デバッグログ
+// ════════════════════════════════
+function dbgLog(type,msg){
+  const el=document.getElementById(`ocr-${type}-debug`);
+  if(!el)return;
+  el.style.display='block';
+  el.innerHTML+=`<div>${new Date().toLocaleTimeString('ja-JP')} ${msg}</div>`;
+  el.scrollTop=el.scrollHeight;
+}
+
+// ════════════════════════════════
+// グローバル定数
+// ════════════════════════════════
+const CHAR_FIX={'O':'0','o':'0','I':'1','l':'1','i':'1','S':'5','B':'8','Z':'2','G':'6'};
+function fixOcrText(t){return(t||'').split('').map(c=>CHAR_FIX[c]||c).join('');}
+
+// ════════════════════════════════
+// ④ 領域切り出し・LICENSE_LAYOUT
+// v4.3で廃止（三者100%合意）
+// 全体OCR＋正規表現方式に移行したため不使用
+// ════════════════════════════════
+/*
+const LICENSE_LAYOUT={
+  name:     {x:0.082,y:0.019,w:0.549,h:0.130},
+  birth:    {x:0.631,y:0.019,w:0.327,h:0.130},
+  addr:     {x:0.082,y:0.148,w:0.876,h:0.130},
+  issue:    {x:0.082,y:0.278,w:0.526,h:0.130},
+  expiry:   {x:0.082,y:0.407,w:0.584,h:0.148},
+  condition:{x:0.082,y:0.556,w:0.526,h:0.130},
+  number:   {x:0.082,y:0.685,w:0.701,h:0.130},
+  type:     {x:0.082,y:0.815,w:0.643,h:0.185},
+};
+function cropRegion(canvas,region){
+  const r=LICENSE_LAYOUT[region];if(!r)return null;
+  const W=canvas.width,H=canvas.height;
+  const cx=Math.floor(W*r.x),cy=Math.floor(H*r.y);
+  const cw=Math.max(1,Math.floor(W*r.w)),ch=Math.max(1,Math.floor(H*r.h));
+  const c=document.createElement('canvas');
+  c.width=cw*3;c.height=ch*3;
+  c.getContext('2d').drawImage(canvas,cx,cy,cw,ch,0,0,cw*3,ch*3);
+  return c;
+}
+*/
+
+// ════════════════════════════════
+// ① 画像品質チェック
+// ════════════════════════════════
+function checkImageQuality(canvas){
+  const W=320,H=240;
+  const tmp=document.createElement('canvas');
+  tmp.width=W;tmp.height=H;
+  tmp.getContext('2d').drawImage(canvas,0,0,W,H);
+  const d=tmp.getContext('2d').getImageData(0,0,W,H).data;
+  const pixels=W*H;
+  const gray=new Float32Array(pixels);
+  let brightness=0;
+  for(let i=0;i<pixels;i++){
+    gray[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+    brightness+=gray[i];
+  }
+  brightness/=pixels;
+  let lapSum=0,lapCount=0;
+  for(let y=1;y<H-1;y++){
+    for(let x=1;x<W-1;x++){
+      const lap=gray[(y-1)*W+x]+gray[(y+1)*W+x]+gray[y*W+x-1]+gray[y*W+x+1]-4*gray[y*W+x];
+      lapSum+=lap*lap;lapCount++;
+    }
+  }
+  const blurScore=lapSum/lapCount;
+  let mean=brightness,variance=0;
+  for(let i=0;i<pixels;i++)variance+=(gray[i]-mean)*(gray[i]-mean);
+  const contrast=Math.sqrt(variance/pixels);
+  return{brightness,blurScore,contrast,
+    isDark:brightness<50,isBlurred:blurScore<30,isLowContrast:contrast<20,
+    ok:brightness>=50&&blurScore>=30&&contrast>=20};
+}
+
+// ════════════════════════════════
+// ② 正規化 v5（完全無料・ガイド枠固定クロップ）
+// OpenCV不要・Canvasのみ・確実動作
+// 設計：ユーザーがガイド枠に合わせて撮影済み
+//       → ガイド枠の比率（1.6:1）で固定中央クロップ
+// ════════════════════════════════
+function perspectiveCorrectToNormalized(srcCanvas){
+  const W=1024,H=640;  // 免許証比率 1.6:1 に固定
+  return{canvas:applyGuideCrop(srcCanvas,W,H),method:'guide-crop-v5'};
+}
+
+// ガイド枠比率でクロップ（v5メソッド）
+// カメラ画面でユーザーが枠に合わせているため
+// 撮影画像中央の「免許証比率エリア」を取り出すだけでよい
+function applyGuideCrop(srcCanvas,W,H){
+  const result=document.createElement('canvas');
+  result.width=W;result.height=H;
+  const sw=srcCanvas.width,sh=srcCanvas.height;
+  const targetRatio=W/H;  // 1.6
+
+  // カメラ映像の中央から免許証比率でクロップ
+  // 横長画面：高さ基準で幅を計算（上下余白カット）
+  // 縦長画面：幅基準で高さを計算（左右余白カット）
+  const srcRatio=sw/sh;
+  let cx,cy,cw,ch;
+
+  if(srcRatio>targetRatio){
+    // カメラが横長 → 高さ基準80%（三者合意）
+    ch=Math.round(sh*0.80);
+    cw=Math.round(ch*targetRatio);
+    cx=Math.round((sw-cw)/2);
+    cy=Math.round((sh-ch)/2);
+  }else{
+    // カメラが縦長 → 幅基準80%（三者合意）
+    cw=Math.round(sw*0.80);
+    ch=Math.round(cw/targetRatio);
+    cx=Math.round((sw-cw)/2);
+    cy=Math.round((sh-ch)/2);
+  }
+
+  result.getContext('2d').drawImage(srcCanvas,cx,cy,cw,ch,0,0,W,H);
+  return result;
+}
+
+// ③ コントラスト強調+シャープネス
+function enhanceCanvas(canvas){
+  if(window.cvReady&&typeof cv!=='undefined'){
+    try{
+      const src=cv.imread(canvas);
+      const gray=new cv.Mat();
+      cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
+      const eq=new cv.Mat();
+      cv.equalizeHist(gray,eq);
+      const kernel=cv.matFromArray(3,3,cv.CV_32F,[-1,-1,-1,-1,9,-1,-1,-1,-1]);
+      const sharp=new cv.Mat();
+      cv.filter2D(eq,sharp,-1,kernel);
+      cv.imshow(canvas,sharp);
+      src.delete();gray.delete();eq.delete();kernel.delete();sharp.delete();
+      return;
+    }catch(e){}
+  }
+  const ctx=canvas.getContext('2d');
+  const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const d=img.data;
+  for(let i=0;i<d.length;i+=4){
+    const g=Math.round(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114);
+    const c=Math.min(255,Math.max(0,((g-128)*1.4)+128));
+    d[i]=c;d[i+1]=c;d[i+2]=c;
+  }
+  ctx.putImageData(img,0,0);
+}
+
+// ⑤ Gemini API（APIキー設定時のみ動作・現在は無効）
+async function ocrWithGemini(normalizedCanvas,apiKey){
+  const base64=normalizedCanvas.toDataURL('image/jpeg',0.92).split(',')[1];
+  const prompt=`この画像は日本の運転免許証です。文字認識を行い、以下の項目を指定のJSON構造のみで返してください。解説やMarkdownのバッククォート装飾は一切不要です。
+{"name":"氏名","birth":"YYYY-MM-DD","addr":"住所","number":"12桁の数字","expiry":"YYYY-MM-DD","type":"免許種別（カンマ区切り）","issue":"YYYY-MM-DD","condition":"条件等"}`;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+    body:JSON.stringify({
+      contents:[{parts:[{text:prompt},{inlineData:{mimeType:'image/jpeg',data:base64}}]}],
+      generationConfig:{
+        temperature:0.1,
+        maxOutputTokens:500,
+        responseMimeType:'application/json'  // JSON出力を強制
+      }
+    })
+  });
+  if(!res.ok){const e=await res.json();throw new Error(`Gemini ${res.status}: ${e.error?.message||''}`);}
+  const data=await res.json();
+  const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+  // responseMimeType指定済みのためJSONが直接返る
+  try{return JSON.parse(raw);}
+  catch(e){
+    // フォールバック：マークダウン除去してパース
+    const match=raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*?\}/);
+    if(!match)throw new Error('JSON解析失敗');
+    return JSON.parse(match[0]);
+  }
+}
+
+// ════════════════════════════════
+// ⑥ OCR（Firebase Functions経由・Gemini 2.5 Flash）
+// 三者100%合意・APIキー完全非公開・個人情報保護
+// ════════════════════════════════
+const FUNCTIONS_URL='https://us-central1-shinkyu-vehicle-49b8e.cloudfunctions.net/analyzeLicense';
+
+async function ocrWithGemini(norm,onStatus,ocrType){
+  const result={name:'',licenseNumber:'',expiry:'',licenseType:'',birth:'',addr:'',issue:'',condition:''};
+  if(onStatus)onStatus('AIサーバーに送信中...');
+  try{
+    const base64Image=norm.toDataURL('image/jpeg',0.85).split(',')[1];
+    const response=await fetch(FUNCTIONS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({base64Image:base64Image,type:ocrType||'license'})
+    });
+
+    // ★原因特定①：エラーレスポンスを画面に表示
+    if(!response.ok){
+      const errText=await response.text();
+      alert('【サーバーエラー】\nステータス: '+response.status+'\n内容: '+errText);
+      if(onStatus)onStatus('サーバーエラー: '+response.status);
+      norm.width=0;norm.height=0;
+      return result;
+    }
+
+    // ★原因特定②：生レスポンスを画面にポップアップ表示
+    const rawText=await response.text();
+    alert('【サーバーレスポンス】\n'+rawText);
+
+    const data=JSON.parse(rawText);
+    if(onStatus)onStatus('AI読み取り完了');
+
+    result.name=data.name||'';
+    result.birth=data.birth||'';
+    result.addr=data.addr||'';
+    result.licenseNumber=data.number||'';
+    result.issue=data.issue||'';
+    result.expiry=data.expiry||'';
+    result.condition=data.condition||'';
+    result.licenseType=data.type||'';
+
+    norm.width=0;norm.height=0;
+    return result;
+
+  }catch(e){
+    alert('【クライアントエラー】\n'+e.message);
+    if(onStatus)onStatus('エラー: '+e.message);
+    norm.width=0;norm.height=0;
+    return result;
+  }
+}
+
+async function ocrWithTesseract(norm,onStatus){
+  return await ocrWithGemini(norm,onStatus,'license');
+}
+
+function normalizeGeminiResult(g){
+  return{
+    name:g.name||'',birth:g.birth||'',addr:g.addr||g.address||'',
+    issue:g.issue||'',expiry:g.expiry||'',condition:g.condition||'',
+    licenseNumber:(g.number||'').replace(/[^0-9]/g,'').substring(0,12),
+    licenseType:g.type||'',
+  };
+}
+
+function applyToForm(p){
+  const s=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+  s('drv-name',p.name);s('drv-birth',p.birth);s('drv-addr',p.addr);
+  s('drv-issue',p.issue);s('drv-exp',p.expiry);s('drv-condition',p.condition);
+  s('drv-license-num',p.licenseNumber);
+  if(p.licenseType){
+    const sel=document.getElementById('drv-lic');
+    if(sel){
+      const types=['大型','中型','準中型','普通'];
+      const found=types.find(t=>p.licenseType.includes(t));
+      if(found){const m=Array.from(sel.options).map(o=>o.value).find(o=>o.includes(found));if(m)sel.value=m;}
+    }
+  }
+}
+
+// ════════════════════════════════
+// ⑧ メインUI
+// ════════════════════════════════
+function startOcr(type){
+  document.getElementById(`ocr-${type}-debug`).style.display='none';
+  document.getElementById(`ocr-${type}-debug`).innerHTML='';
+  if(type==='license')showLicenseCamera();
+  else document.getElementById(`ocr-${type}-input`).click();
+}
+
+async function showLicenseCamera(){
+  const ov=document.createElement('div');
+  ov.id='ocr-ov';
+  ov.style.cssText='position:fixed;inset:0;background:#000;z-index:9999;display:flex;flex-direction:column;font-family:sans-serif;';
+  ov.innerHTML=`
+    <div id="ph-shoot" style="display:flex;flex-direction:column;height:100%;">
+      <div style="padding:10px 14px;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;gap:3px;">
+        <div style="color:#22c55e;font-size:13px;font-weight:bold;">📋 緑の枠に免許証全体を合わせて撮影</div>
+        <div id="cam-info" style="color:#64748b;font-size:10px;">カメラ起動中...</div>
+      </div>
+      <div style="position:relative;flex:1;overflow:hidden;">
+        <video id="ocr-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;background:#0f172a;cursor:crosshair;"></video>
+
+        <!-- ▼ ガイド枠：padding-top:62.5%方式（三者合意・全ブラウザ安定） -->
+        <div id="guide-overlay" style="
+          position:absolute;inset:0;
+          display:flex;align-items:center;justify-content:center;
+          pointer-events:none;">
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,0.52);"></div>
+          <div style="
+            position:absolute;
+            width:85%;
+            top:50%;left:50%;
+            transform:translate(-50%,-50%);
+            z-index:2;">
+            <!-- padding-top:62.5% = 1/1.6 = 免許証比率 -->
+            <div style="
+              position:relative;
+              width:100%;
+              padding-top:62.5%;
+              border:2.5px solid #22c55e;
+              border-radius:10px;
+              box-shadow:0 0 0 9999px rgba(0,0,0,0.52);">
+              <!-- 四隅マーカー -->
+              <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:4px solid #22c55e;border-left:4px solid #22c55e;border-radius:3px 0 0 0;"></div>
+              <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:4px solid #22c55e;border-right:4px solid #22c55e;border-radius:0 3px 0 0;"></div>
+              <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:4px solid #22c55e;border-left:4px solid #22c55e;border-radius:0 0 0 3px;"></div>
+              <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:4px solid #22c55e;border-right:4px solid #22c55e;border-radius:0 0 3px 0;"></div>
+              <!-- ラベル -->
+              <div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);color:#22c55e;font-size:10px;font-weight:bold;letter-spacing:1px;white-space:nowrap;text-shadow:0 1px 3px #000;">免許証をここに合わせてください</div>
+            </div>
+          </div>
+        </div>
+        <!-- ▲ ガイド枠ここまで -->
+
+        <div id="focus-ring" style="display:none;position:absolute;width:52px;height:52px;border:2px solid #22c55e;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);transition:all 0.15s;z-index:10;"></div>
+        <div id="quality-badge" style="display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);padding:4px 12px;border-radius:12px;font-size:11px;font-weight:bold;z-index:10;"></div>
+        <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-size:10px;white-space:nowrap;z-index:10;">👆 タップでフォーカス調整</div>
+      </div>
+      <div style="display:flex;gap:8px;padding:14px;justify-content:center;background:rgba(0,0,0,0.95);flex-wrap:wrap;">
+        <button id="btn-cancel" style="padding:11px 16px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:13px;">✕</button>
+        <button id="btn-shoot" style="flex:1;padding:11px 16px;background:#22c55e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;">📷 Webカメラ撮影</button>
+        <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:11px 10px;background:#3b82f6;color:#fff;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;white-space:nowrap;">
+          🖼️ 標準カメラで撮る
+          <input type="file" accept="image/*" capture="environment" id="btn-file-capture" style="display:none;">
+        </label>
+      </div>
+    </div>
+    <div id="ph-prev" style="display:none;flex-direction:column;height:100%;">
+      <div style="padding:10px 14px;background:rgba(0,0,0,0.9);">
+        <div id="prev-title" style="color:#3b82f6;font-size:13px;font-weight:bold;">📋 プレビュー確認</div>
+        <div id="prev-sub" style="color:#64748b;font-size:10px;margin-top:2px;"></div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;">
+        <canvas id="prev-canvas" style="width:100%;border:1px solid #1e293b;border-radius:6px;max-height:200px;"></canvas>
+        <div id="quality-warn" style="display:none;background:#7f1d1d;border:1px solid #ef4444;border-radius:6px;padding:10px;color:#fca5a5;font-size:12px;"></div>
+        <div id="ocr-result-area" style="display:none;background:#0f172a;border-radius:8px;padding:12px;">
+          <div style="color:#64748b;font-size:11px;margin-bottom:8px;">📝 読み取り結果（タップして修正可能）</div>
+          <div id="ocr-fields"></div>
+        </div>
+        <div id="ocr-log" style="font-size:10px;color:#334155;background:#0f172a;padding:6px 8px;border-radius:4px;max-height:80px;overflow-y:auto;"></div>
+      </div>
+      <div style="padding:14px;background:rgba(0,0,0,0.95);display:flex;gap:10px;justify-content:center;">
+        <button id="btn-retake" style="padding:11px 20px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:14px;">撮り直す</button>
+        <button id="btn-ocr" style="display:none;padding:11px 24px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;">🔍 OCR実行</button>
+        <button id="btn-confirm" style="display:none;padding:11px 24px;background:#22c55e;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:bold;">✓ 確定</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(ov);
+
+  const video=document.getElementById('ocr-video');
+  const camInfo=document.getElementById('cam-info');
+  const qBadge=document.getElementById('quality-badge');
+  let stream=null,capturedCanvas=null,normalizedCanvas=null,ocrResult=null;
+
+  const addLog=m=>{const el=document.getElementById('ocr-log');if(el){el.innerHTML+=`<div>${m}</div>`;el.scrollTop=el.scrollHeight;}};
+  const stopStream=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());};
+  const setTitle=(t,s='')=>{document.getElementById('prev-title').textContent=t;document.getElementById('prev-sub').textContent=s;};
+
+  // カメラ起動（高画質・段階フォールバック・iOS/Android両対応）
+  const camConstraints=[
+    {video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false},
+    {video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:{facingMode:'environment'},audio:false},
+  ];
+  let started=false;
+  for(const c of camConstraints){
+    try{
+      const s=await navigator.mediaDevices.getUserMedia(c);
+      stream=s;video.srcObject=s;started=true;
+      const track=s.getVideoTracks()[0];
+      const st=track.getSettings();
+      camInfo.textContent=`${st.width||'?'}×${st.height||'?'} | タップでフォーカス`;
+      // 能力確認後のみ詳細設定を適用（iOS対策）
+      setTimeout(async()=>{
+        const caps=track.getCapabilities&&track.getCapabilities()||{};
+        const adv={};
+        if(caps.focusMode?.includes('continuous'))adv.focusMode='continuous';
+        if(caps.exposureMode?.includes('continuous'))adv.exposureMode='continuous';
+        if(caps.whiteBalanceMode?.includes('continuous'))adv.whiteBalanceMode='continuous';
+        if(Object.keys(adv).length>0)
+          track.applyConstraints({advanced:[adv]}).catch(()=>{});
+      },1000);
+      break;
+    }catch(e){console.warn('カメラ制約失敗・次を試行:',e);}
+  }
+  if(!started){ov.remove();return;}
+  const timer=setInterval(()=>{
+      if(!stream||document.getElementById('ph-shoot').style.display==='none'){clearInterval(timer);return;}
+      const tmp=document.createElement('canvas');tmp.width=320;tmp.height=240;
+      tmp.getContext('2d').drawImage(video,0,0,320,240);
+      const q=checkImageQuality(tmp);
+      qBadge.style.display='block';
+      if(q.isDark){qBadge.style.background='rgba(127,29,29,0.9)';qBadge.style.color='#fca5a5';qBadge.textContent='暗すぎます';}
+      else if(q.isBlurred){qBadge.style.background='rgba(120,53,15,0.9)';qBadge.style.color='#fde68a';qBadge.textContent='フォーカスを合わせてください';}
+      else if(q.isLowContrast){qBadge.style.background='rgba(30,58,138,0.9)';qBadge.style.color='#bfdbfe';qBadge.textContent='コントラスト不足';}
+      else{qBadge.style.background='rgba(20,83,45,0.9)';qBadge.style.color='#86efac';qBadge.textContent='✓ 品質OK・撮影できます';}
+    },800);
+
+  // タップフォーカス
+  video.addEventListener('click',e=>{
+    const ring=document.getElementById('focus-ring');
+    ring.style.left=e.clientX+'px';ring.style.top=e.clientY+'px';
+    ring.style.display='block';ring.style.opacity='1';ring.style.borderColor='#22c55e';
+    setTimeout(()=>{ring.style.borderColor='#fbbf24';},200);
+    setTimeout(()=>{ring.style.opacity='0';setTimeout(()=>ring.style.display='none',200);},1000);
+    const track=stream&&stream.getVideoTracks()[0];if(!track)return;
+    const rect=video.getBoundingClientRect();
+    const x=(e.clientX-rect.left)/rect.width,y=(e.clientY-rect.top)/rect.height;
+    const caps=track.getCapabilities&&track.getCapabilities();
+    if(caps&&caps.pointsOfInterest)
+      track.applyConstraints({advanced:[{pointsOfInterest:[{x,y}],focusMode:'single-shot'}]}).catch(()=>{});
+  });
+
+  document.getElementById('btn-cancel').onclick=()=>{stopStream();ov.remove();};
+
+  // 標準カメラ撮影→画像選択処理（ChatGPT案：HDR・AI補正フル活用）
+  document.getElementById('btn-file-capture').onchange=async function(){
+    const file=this.files&&this.files[0];
+    if(!file)return;
+    stopStream();
+    const img=new Image();
+    img.onload=async()=>{
+      capturedCanvas=document.createElement('canvas');
+      capturedCanvas.width=img.naturalWidth;
+      capturedCanvas.height=img.naturalHeight;
+      capturedCanvas.getContext('2d').drawImage(img,0,0);
+      URL.revokeObjectURL(img.src);
+      const q=checkImageQuality(capturedCanvas);
+      addLog(`品質(標準カメラ): 明るさ=${q.brightness.toFixed(0)} ブレ=${q.blurScore.toFixed(1)} コントラスト=${q.contrast.toFixed(1)}`);
+      document.getElementById('ph-shoot').style.display='none';
+      const phP=document.getElementById('ph-prev');phP.style.display='flex';phP.style.flexDirection='column';
+      setTitle('🔄 画像正規化中...','標準カメラ画像');
+      const{canvas:norm,method}=perspectiveCorrectToNormalized(capturedCanvas);
+      normalizedCanvas=norm;
+      addLog(`正規化: ${norm.width}×${norm.height} [${method}]`);
+      const pc=document.getElementById('prev-canvas');
+      pc.width=norm.width;pc.height=norm.height;
+      const pcCtx=pc.getContext('2d');
+      pcCtx.imageSmoothingEnabled=false;
+      pcCtx.drawImage(norm,0,0);
+      setTitle('📷 プレビュー確認','標準カメラ画像');
+      document.getElementById('btn-ocr').style.display='inline-block';
+    };
+    img.src=URL.createObjectURL(file);
+  };
+
+  document.getElementById('btn-shoot').onclick=async()=>{
+    const btn=document.getElementById('btn-shoot');
+    btn.disabled=true;btn.textContent='フォーカス中...';
+    // 撮影直前にフォーカスロック（Android対応・iOS自動スキップ）
+    const track=stream&&stream.getVideoTracks()[0];
+    if(track){
+      const caps=track.getCapabilities&&track.getCapabilities()||{};
+      if(caps.focusMode?.includes('locked')){
+        await track.applyConstraints({advanced:[{focusMode:'locked'}]}).catch(()=>{});
+      }
+    }
+    await new Promise(r=>setTimeout(r,1500));
+    btn.textContent='撮影中...';
+    capturedCanvas=document.createElement('canvas');
+    capturedCanvas.width=video.videoWidth||1280;
+    capturedCanvas.height=video.videoHeight||720;
+    capturedCanvas.getContext('2d').drawImage(video,0,0);
+    stopStream();
+    const q=checkImageQuality(capturedCanvas);
+    addLog(`品質: 明るさ=${q.brightness.toFixed(0)} ブレ=${q.blurScore.toFixed(1)} コントラスト=${q.contrast.toFixed(1)}`);
+    document.getElementById('ph-shoot').style.display='none';
+    const phP=document.getElementById('ph-prev');phP.style.display='flex';phP.style.flexDirection='column';
+    setTitle('🔄 画像正規化中（v4）...','');
+    const{canvas:norm,method}=perspectiveCorrectToNormalized(capturedCanvas);
+    normalizedCanvas=norm;
+    addLog(`正規化: ${norm.width}×${norm.height} [${method}]`);
+    // imageSmoothingEnabled=false（Gemini提案：縮小時の文字ボケ防止）
+    const pc=document.getElementById('prev-canvas');
+    pc.width=norm.width;pc.height=norm.height;
+    const pcCtx=pc.getContext('2d');
+    pcCtx.imageSmoothingEnabled=false;
+    pcCtx.drawImage(norm,0,0);
+    if(!q.ok){
+      const warn=document.getElementById('quality-warn');warn.style.display='block';
+      const msgs=[];
+      if(q.isDark)msgs.push('暗すぎます');
+      if(q.isBlurred)msgs.push('フォーカスが合っていません');
+      if(q.isLowContrast)msgs.push('コントラスト不足');
+      warn.innerHTML=`⚠️ ${msgs.join('・')}<br><small>撮り直しを推奨しますが、このまま続行も可能です。</small>`;
+    }
+    setTitle('📷 プレビュー確認',`補正: ${method}`);
+    document.getElementById('btn-ocr').style.display='inline-block';
+  };
+
+  document.getElementById('btn-ocr').onclick=async()=>{
+    document.getElementById('btn-ocr').style.display='none';
+    setTitle('🤖 Gemini AIで認識中...','高精度モード');
+    addLog('Firebase Functions経由でGemini APIを呼び出し中...');
+    let parsed=null,usedEngine='Gemini 2.5 Flash';
+    try{
+      parsed=await ocrWithGemini(normalizedCanvas,msg=>setTitle(`🤖 ${msg}`,''),  'license');
+      addLog('Gemini OCR完了');
+    }catch(e){
+      addLog(`エラー: ${e.message}`);
+      usedEngine='エラー';
+    }
+    // 画像破棄（Gemini提案：width=0でGC強制トリガー）
+    [normalizedCanvas,capturedCanvas].forEach(c=>{
+      if(!c)return;
+      const ctx=c.getContext('2d');
+      if(ctx)ctx.clearRect(0,0,c.width,c.height);
+      c.width=0;c.height=0;  // メモリバッファ強制解放
+    });
+    const pc2=document.getElementById('prev-canvas');
+    if(pc2){pc2.getContext('2d').clearRect(0,0,pc2.width,pc2.height);pc2.width=0;pc2.height=0;}
+    ocrResult=parsed;
+    setTitle(`✅ 完了`,`エンジン: ${usedEngine}`);
+    const fields=document.getElementById('ocr-fields');
+    const defs=[
+      ['氏名','name','text',''],
+      ['生年月日','birth','date',''],
+      ['住所','addr','text',''],
+      ['免許証番号','licenseNumber','text',''],
+      ['有効期限','expiry','date',''],
+      ['免許種別','licenseType','text',''],
+      ['交付日','issue','date',''],
+      ['条件等','condition','text',''],
+    ];
+    fields.innerHTML=defs.map(([label,key,type,hint])=>`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+        <div style="min-width:72px;flex-shrink:0;">
+          <div style="color:#475569;font-size:10px;">${label}</div>
+          ${hint?`<div style="color:#f59e0b;font-size:9px;">${hint}</div>`:''}
+        </div>
+        <input type="${type}" value="${parsed[key]||''}" data-key="${key}"
+          style="flex:1;background:#1e293b;
+            border:1px solid ${parsed[key]?'#22c55e':hint?'#f59e0b44':'#334155'};
+            border-radius:4px;padding:5px 8px;
+            color:${parsed[key]?'#e2e8f0':'#94a3b8'};
+            font-size:12px;
+            placeholder-color:#64748b;"
+          placeholder="${hint?'タップして入力':'−'}"
+          oninput="if(window._ocrRes)window._ocrRes['${key}']=this.value"/>
+      </div>`).join('');
+    window._ocrRes=ocrResult;
+    document.getElementById('ocr-result-area').style.display='block';
+    document.getElementById('btn-confirm').style.display='inline-block';
+    const filled=Object.values(parsed).filter(v=>v&&v.length>0).length;
+    const autoFields=['licenseNumber','expiry','licenseType'].filter(k=>parsed[k]&&parsed[k].length>0).length;
+    addLog(`自動入力: ${filled}項目 / ${usedEngine} | 番号・期限・種別: ${autoFields}/3`);
+    if(autoFields<2)addLog('⚠️ 氏名・住所は手入力をお願いします（黄枠フィールド）');
+  };
+
+  document.getElementById('btn-retake').onclick=()=>{ov.remove();showLicenseCamera();};
+
+  document.getElementById('btn-confirm').onclick=()=>{
+    const res=window._ocrRes||ocrResult;
+    if(res){
+      applyToForm(res);
+      const f=Object.values(res).filter(v=>v&&v.length>0).length;
+      const sEl=document.getElementById('ocr-license-status');
+      if(sEl){sEl.style.display='block';sEl.style.color=f>=3?'#22c55e':'#f59e0b';
+        sEl.textContent=f>=3?`✓ ${f}項目を自動入力しました`:`⚠ ${f}項目入力（残りは手動で）`;}
+      toast(f>=3?'免許証の読み取り完了！':'読み取り完了（手動確認をお願いします）');
+    }
+    window._ocrRes=null;ov.remove();
+  };
+}
+
+async function processOcr(input,type){
+  const file=input.files[0];if(!file)return;
+  const sEl=document.getElementById(`ocr-${type}-status`);
+  sEl.style.display='block';sEl.style.color='#f59e0b';sEl.textContent='📷 読み込み中...';
+  try{
+    const img=new Image();
+    await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>{img.onload=res;img.onerror=rej;img.src=e.target.result;};r.onerror=rej;r.readAsDataURL(file);});
+    const c=document.createElement('canvas');c.width=img.width;c.height=img.height;
+    c.getContext('2d').drawImage(img,0,0);
+    const{canvas:norm}=perspectiveCorrectToNormalized(c);
+
+    if(type==='license'){
+      sEl.textContent='🤖 Gemini AIで免許証を読み取り中...';
+      const parsed=await ocrWithGemini(norm,msg=>sEl.textContent=`🤖 ${msg}`,'license');
+      applyToForm(parsed);
+      const f=Object.values(parsed).filter(v=>v&&v.length>0).length;
+      sEl.style.color=f>=2?'#22c55e':'#f59e0b';
+      sEl.textContent=f>=2?`✓ ${f}項目自動入力完了`:`⚠ ${f}項目（残りは手動で）`;
+      toast(f>=2?'読み取り完了！':'読み取り完了（手動確認をお願いします）');
+    }else{
+      sEl.textContent='🤖 Gemini AIで車検証を読み取り中...';
+      const data=await ocrWithGemini(norm,msg=>sEl.textContent=`🤖 ${msg}`,'vehicle');
+      const sv2=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+      sv2('veh-num',data.plateNumber||'');
+      sv2('veh-model',(data.modelType||''));
+      sv2('veh-year',data.firstRegistration?data.firstRegistration.substring(0,4):'');
+      // 車検証追加項目
+      const extraFields=[
+        ['veh-vin',data.vin],
+        ['veh-inspection-expiry',data.inspectionExpiry],
+        ['veh-owner-name',data.ownerName],
+        ['veh-owner-addr',data.ownerAddr],
+        ['veh-user-name',data.userName],
+        ['veh-user-addr',data.userAddr],
+        ['veh-displacement',data.displacement],
+        ['veh-weight',data.weight],
+      ];
+      extraFields.forEach(([id,v])=>sv2(id,v||''));
+      sEl.style.color='#22c55e';sEl.textContent='✓ 車検証読み取り完了';toast('車検証読み取り完了！');
+    }
+  }catch(e){sEl.style.color='#ef4444';sEl.textContent=`✕ ${e.message}`;}
+  input.value='';
+}
+
+function parseVehicleFromText(text){
+  const r={number:'',model:'',year:''};
+  const nm=text.match(/[\u4e00-\u9fff都道府県]{2,3}\s*\d{1,3}\s*[\u3042-\u3093]\s*\d{4}/);
+  if(nm)r.number=nm[0].replace(/\s/g,'');
+  const ym=text.match(/(?:平成|令和|昭和)\s*(\d+)\s*年|(\d{4})\s*年/);
+  if(ym){if(ym[2])r.year=ym[2];else{const n=parseInt(ym[1]);if(text.includes('令和'))r.year=String(n+2018);else if(text.includes('平成'))r.year=String(n+1988);}}
+  const mm=text.match(/[\u30A0-\u30FF\u30FC]{2,10}/);if(mm)r.model=mm[0];
+  return r;
+}
+
+
+
+
+(function init(){const p=new URLSearchParams(location.search);const car=p.get('car');if(car){const v=vehicles.find(x=>x.number===car||x.number===decodeURIComponent(car));if(v){currentVeh=v;go('scr-crew');return;}}go('scr-top');})();
+</script>
+</body>
+</html>
