@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCRテスト</title>
+<style>
+body{font-family:sans-serif;margin:20px;background:#1e293b;color:#e2e8f0;}
+video{width:100%;border-radius:6px;background:#000;margin-bottom:10px;}
+.btn{display:block;width:100%;padding:14px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;margin-bottom:10px;}
+.btn:disabled{background:#64748b;}
+.status{padding:10px;background:#0f172a;border-radius:4px;font-size:13px;margin-bottom:15px;min-height:40px;word-break:break-all;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;color:#94a3b8;margin-bottom:3px;}
+.field input{width:100%;padding:8px;box-sizing:border-box;border:1px solid #334155;border-radius:4px;font-size:15px;background:#0f172a;color:#e2e8f0;}
+</style>
+</head>
+<body>
+<h2 style="color:#22c55e;">OCRテスト（Gemini直結版）</h2>
+<p style="color:#f59e0b;font-size:12px;">バージョン: 2026-06-14-FINAL</p>
+<video id="video" autoplay playsinline muted></video>
+<button id="btn-capture" class="btn">撮影して自動入力</button>
+<div id="status-box" class="status">カメラ起動中...</div>
+<div class="field"><label>氏名</label><input type="text" id="field-name"></div>
+<div class="field"><label>生年月日</label><input type="text" id="field-birth"></div>
+<div class="field"><label>住所</label><input type="text" id="field-addr"></div>
+<div class="field"><label>免許証番号</label><input type="text" id="field-number"></div>
+<div class="field"><label>交付日</label><input type="text" id="field-issue"></div>
+<div class="field"><label>有効期限</label><input type="text" id="field-expiry"></div>
+<div class="field"><label>条件等</label><input type="text" id="field-condition"></div>
+<div class="field"><label>免許種別</label><input type="text" id="field-type"></div>
+<script>
+var FUNCTIONS_URL='https://us-central1-shinkyu-vehicle-49b8e.cloudfunctions.net/analyzeLicense';
+var video=document.getElementById('video');
+var btn=document.getElementById('btn-capture');
+var status=document.getElementById('status-box');
+status.textContent='バージョン確認OK: 2026-06-14-FINAL';
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})
+.then(function(s){video.srcObject=s;status.textContent='カメラ起動完了。撮影ボタンを押してください。';})
+.catch(function(e){status.textContent='カメラエラー: '+e.message;});
+btn.addEventListener('click',function(){
+  btn.disabled=true;
+  status.textContent='画像を処理中...';
+  var canvas=document.createElement('canvas');
+  canvas.width=video.videoWidth||1280;
+  canvas.height=video.videoHeight||720;
+  canvas.getContext('2d').drawImage(video,0,0);
+  var base64Image=canvas.toDataURL('image/jpeg',0.85).split(',')[1];
+  status.textContent='Functionsに送信中...URL='+FUNCTIONS_URL;
+  fetch(FUNCTIONS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({base64Image:base64Image,type:'license'})
+  }).then(function(res){
+    status.textContent='レスポンス受信: '+res.status;
+    if(!res.ok){return res.text().then(function(t){throw new Error('HTTP '+res.status+': '+t);});}
+    return res.json();
+  }).then(function(data){
+    status.textContent='OCR成功！ name='+data.name+' number='+data.number;
+    document.getElementById('field-name').value=data.name||'';
+    document.getElementById('field-birth').value=data.birth||'';
+    document.getElementById('field-addr').value=data.addr||'';
+    document.getElementById('field-number').value=data.number||'';
+    document.getElementById('field-issue').value=data.issue||'';
+    document.getElementById('field-expiry').value=data.expiry||'';
+    document.getElementById('field-condition').value=data.condition||'';
+    document.getElementById('field-type').value=data.type||'';
+  }).catch(function(e){
+    status.textContent='エラー: '+e.message;
+  }).finally(function(){
+    btn.disabled=false;
+  });
+});
+</script>
+</body>
+</html>
