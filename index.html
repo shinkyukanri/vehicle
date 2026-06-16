@@ -1205,9 +1205,9 @@ async function showLicenseCamera(){
     setTitle('🔄 画像を最適化中...','');
     try{
       // 長辺2000pxにリサイズ・JPEG圧縮（文字が潰れないよう高精細維持）
-      //const file=await resizeAndCompressImage(file,2000,0.85);
+      const optimizedBlob=await resizeAndCompressImage(file,2000,0.85);
       // プレビュー表示
-      const previewUrl=URL.createObjectURL(file);
+      const previewUrl=URL.createObjectURL(optimizedBlob);
       const img=new Image();
       img.onload=()=>{
         const pc=document.getElementById('prev-canvas');
@@ -1219,7 +1219,7 @@ async function showLicenseCamera(){
       // 即OCR実行（ボタン不要）
       setTitle('🤖 Gemini AIで読み取り中...','');
       const formData=new FormData();
-      formData.append('image',file,'license.jpg');
+      formData.append('image',optimizedBlob,'license.jpg');
       formData.append('type','license');
       const response=await fetch(FUNCTIONS_URL,{method:'POST',body:formData});
       if(!response.ok)throw new Error('サーバーエラー: '+response.status);
