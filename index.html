@@ -1205,7 +1205,7 @@ async function showLicenseCamera(){
     setTitle('🔄 画像を最適化中...','');
     try{
       // 長辺2000pxにリサイズ・JPEG圧縮（文字が潰れないよう高精細維持）
-      //const optimizedBlob=await resizeAndCompressImage(file,2000,0.85);
+      //const file=await resizeAndCompressImage(file,2000,0.85);
       // プレビュー表示
       const previewUrl=URL.createObjectURL(file);
       const img=new Image();
